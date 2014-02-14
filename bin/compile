@@ -9,6 +9,13 @@ BIN_DIR=$(cd $(dirname $0); pwd) # absolute path
 BUILD_DIR=$1
 CACHE_DIR=$2
 
+echo 
+
+echo "-------------> Build Dir"
+echo $BUILD_DIR
+echo "-------------> Cache Dir"
+echo $CACHE_DIR
+
 # source in common functions
 . $BIN_DIR/common.sh
 
@@ -16,6 +23,7 @@ curl --silent --location http://heroku-jvm-common.s3.amazonaws.com/jvm-buildpack
 . bin/java
 
 GRAILS_DIR=".grails"
+GRAILS_CMD="grails"
 
 check_build_status()
 {
@@ -28,24 +36,29 @@ check_build_status()
 install_grails()
 {
   VER_TO_INSTALL=$1
-  GRAILS_URL="http://s3.amazonaws.com/heroku-jvm-buildpack-grails/grails-$VER_TO_INSTALL.tar.gz"
+  GRAILS_URL="http://dist.springframework.org.s3.amazonaws.com/release/GRAILS/grails-$VER_TO_INSTALL.zip"
 
-  GRAILS_TAR_FILE="grails-heroku.tar.gz"
+  GRAILS_ZIP_FILE="grails-heroku.zip"
   echo "-----> Installing Grails $VER_TO_INSTALL....."
-  curl --silent --max-time 150 --location $GRAILS_URL -o $GRAILS_TAR_FILE
+  curl --silent --max-time 150 --location $GRAILS_URL -o $GRAILS_ZIP_FILE
 
   # Error checking
-  if [ ! -f $GRAILS_TAR_FILE ]; then
+  if [ ! -f $GRAILS_ZIP_FILE ]; then
     echo "-----> Error downloading Grails framework. Please try again..."
     exit 1
   fi
-  if [ -z "`file $GRAILS_TAR_FILE | grep gzip`" ]; then
+  if [ -z "`file $GRAILS_ZIP_FILE | grep Zip`" ]; then
     echo "-----> Error installing Grails framework or unsupported Grails framework version specified. Please review Dev Center for a list of supported versions."
     exit 1
   fi
 
-  tar xzf $GRAILS_TAR_FILE
-  rm $GRAILS_TAR_FILE
+  #use jar because unzip isn't available
+  jar xf $GRAILS_ZIP_FILE
+  rm $GRAILS_ZIP_FILE
+  #copy to standard dir location
+  mv grails-$VER_TO_INSTALL $GRAILS_DIR
+  #make grails command executable
+  chmod +x $GRAILS_DIR/bin/grails
 
   echo "-----> Done"
 }
@@ -65,38 +78,38 @@ if [ ! -d $CACHE_DIR ] ; then
   mkdir $CACHE_DIR
 fi
 
-# install JDK
-if [ -f ${BUILD_DIR}/system.properties ]; then
-  logger -p user.notice -t "slugc[$$]" "language_pack_java download_jdk"
-  LOGGER_FLAGS="$LOGGER_FLAGS download_jdk"
-  javaVersion=$(detect_java_version ${BUILD_DIR})
-  echo -n "-----> Installing OpenJDK ${javaVersion}..."
-  install_java ${BUILD_DIR} ${javaVersion}
-  jdk_overlay ${BUILD_DIR}
-  echo "done"
-  cp ${BUILD_DIR}/system.properties ${CACHE_DIR}/
+# create default system.properties 
+if [ ! -f ${BUILD_DIR}/system.properties ]; then
+  echo "java.runtime.version=1.6" > ${BUILD_DIR}/system.properties
 fi
+
+# install JDK
+javaVersion=$(detect_java_version ${BUILD_DIR})
+echo -n "-----> Installing OpenJDK ${javaVersion}..."
+install_java ${BUILD_DIR} ${javaVersion}
+jdk_overlay ${BUILD_DIR}
+echo "done"
 
 cd $CACHE_DIR
 
-# install grails
-if [ ! -d $GRAILS_DIR ]; then
-  install_grails $GRAILS_VERSION
+if [ -f $BUILD_DIR/grailsw ] ; then
+    chmod +x $BUILD_DIR/grailsw
+    GRAILS_CMD="./grailsw"
 else
-  INSTALLED_GRAILS_VERSION=$(get_property $GRAILS_DIR/build.properties 'grails.version')
-  if [ "$INSTALLED_GRAILS_VERSION" != "$GRAILS_VERSION" ] ; then
-    echo "-----> Updating Grails version. Previous version was $INSTALLED_GRAILS_VERSION. Updating to $GRAILS_VERSION..."
-    rm -rf $GRAILS_DIR
+  # install grails
+  if [ ! -d $GRAILS_DIR ]; then
     install_grails $GRAILS_VERSION
+  else
+    INSTALLED_GRAILS_VERSION=$(get_property $GRAILS_DIR/build.properties 'grails.version')
+    if [ "$INSTALLED_GRAILS_VERSION" != "$GRAILS_VERSION" ] ; then
+      echo "-----> Updating Grails version. Previous version was $INSTALLED_GRAILS_VERSION. Updating to $GRAILS_VERSION..."
+      rm -rf $GRAILS_DIR
+      install_grails $GRAILS_VERSION
+    fi
   fi
 fi
 
-# This is a simplisitic way to only set JAVA_HOME when on Cedar. If you run this 
-# script locally and your jdk is not in this location, you're responsible for
-# setting it yourself. Need to find a smarter way of conditionally setting this var
-if [ -d /usr/lib/jvm/java-6-openjdk ] ; then
-    export JAVA_HOME=/usr/lib/jvm/java-6-openjdk
-fi
+# JAVA_HOME is exported in install_java
 export GRAILS_HOME=$CACHE_DIR/$GRAILS_DIR
 export PATH=$GRAILS_HOME/bin:$PATH
 
@@ -133,15 +146,19 @@ fi
 # build app
 if [ "$GRAILS_VERSION" != "1.3.7" ] ; then
     BUILDCMD_OPT="-plain-output"
-fi	
+fi
 
+#COMPILECMD="$GRAILS_CMD -Divy.default.ivy.user.dir=$CACHE_DIR compile --non-interactive"
+#echo "-----> Executing $COMPILECMD"
+#eval "$COMPILECMD" | sed -u 's/^/       /'
+#check_build_status
 
-COMPILECMD="grails -Divy.default.ivy.user.dir=$CACHE_DIR compile --non-interactive"
+COMPILECMD="$GRAILS_CMD -Divy.default.ivy.user.dir=$CACHE_DIR compile --non-interactive"
 echo "-----> Executing $COMPILECMD"
 eval "$COMPILECMD" | sed -u 's/^/       /'
 check_build_status
 
-BUILDCMD="grails $BUILD_ENV_OPT $BUILDCMD_OPT -Divy.default.ivy.user.dir=$CACHE_DIR war --non-interactive"
+BUILDCMD="$GRAILS_CMD $BUILD_ENV_OPT $BUILDCMD_OPT -Divy.default.ivy.user.dir=$CACHE_DIR war --non-interactive"
 echo "-----> Executing $BUILDCMD"
 eval "$BUILDCMD" | sed -u 's/^/       /'
 check_build_status
@@ -149,11 +166,23 @@ check_build_status
 if [ ! -d server ] ; then
     JETTY_RUNNER_VERSION=7.5.4.v20111024
 
-    echo "-----> No server directory found. Adding jetty-runner $JETTY_RUNNER_VERSION automatically."
-    mkdir server
-    cp $GRAILS_HOME/jetty-runner-$JETTY_RUNNER_VERSION.jar server/jetty-runner.jar
-    echo "vendored:$JETTY_RUNNER_VERSION" > server/jettyVersion
-    echo "vendored:$JETTY_RUNNER_VERSION" > $CACHE_DIR/jettyVersion
+    echo "Server directoy not found. Creating a new one."
+        mkdir server
+
+        WEBAPP_RUNNER_VERSION=7.0.40.0
+    echo "-----> No server directory found. Adding webapp-runner $WEBAPP_RUNNER_VERSION automatically."
+        DEFAULT_RUNNER_JAR=server/webapp-runner.jar
+        curl -fs http://s3pository.heroku.com/maven-central/com/github/jsimone/webapp-runner/$WEBAPP_RUNNER_VERSION/webapp-runner-$WEBAPP_RUNNER_VERSION.jar > $DEFAULT_RUNNER_JAR
+        #curl -fs http://res.cloudinary.com/intelligrape-pvt-ltd1/raw/upload/akom3xrqomsw4xkg8z9q.jar> $DEFAULT_RUNNER_JAR
+    echo "vendored:$WEBAPP_RUNNER_VERSION" > server/webappRunnerVersion
+    echo "vendored:$WEBAPP_RUNNER_VERSION" > $CACHE_DIR/webappRunnerVersion
+
+    echo $DEFAULT_RUNNER_JAR > server/defaultRunnerJar
+else
+    echo "Server directory found. Not copying webapp-runner.jar"
 fi
 
 
+PROFILE_PATH="$BUILD_DIR/.profile.d/grails.sh"
+mkdir -p $(dirname $PROFILE_PATH)
+echo 'export PATH="/app/.jdk/bin:$PATH"' >> $PROFILE_PATH
