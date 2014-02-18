@@ -8,13 +8,16 @@ BIN_DIR=$(cd $(dirname $0); pwd) # absolute path
 # parse args
 BUILD_DIR=$1
 CACHE_DIR=$2
+ENV_DIR=$3
 
 echo 
 
-echo "-------------> Build Dir"
+echo "-----> Build Dir"
 echo $BUILD_DIR
-echo "-------------> Cache Dir"
+echo "-----> Cache Dir"
 echo $CACHE_DIR
+echo "-----> Env Dir"
+echo $ENV_DIR
 
 # source in common functions
 . $BIN_DIR/common.sh
@@ -154,7 +157,7 @@ if [ $GRAILS_ENV ]; then
   BUILD_ENV_OPT="-Dgrails.env=$GRAILS_ENV"  
 fi
 
-BUILDCMD="$GRAILS_CMD $BUILD_ENV_OPT $BUILDCMD_OPT -Divy.default.ivy.user.dir=$CACHE_DIR war --non-interactive"
+BUILDCMD="$GRAILS_CMD $BUILD_ENV_OPT $BUILDCMD_OPT -Divy.default.ivy.user.dir=$CACHE_DIR war --non-interactive --stacktrace"
 echo "-----> Executing $BUILDCMD"
 eval "$BUILDCMD" | sed -u 's/^/       /'
 check_build_status
