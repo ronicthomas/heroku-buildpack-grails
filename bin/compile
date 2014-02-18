@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/compile <build-dir> <cache-dir>
+# bin/compile <build-dir> <cache-dir> <env-dir>
 
 # fail fast
 set -e
@@ -24,24 +24,13 @@ echo $ENV_DIR
 . $BIN_DIR/common.sh
 
 curl --silent --location http://heroku-jvm-common.s3.amazonaws.com/jvm-buildpack-common.tar.gz | tar xz
+. bin/util
 . bin/java
+
+export_env_dir $ENV_DIR
 
 GRAILS_DIR=".grails"
 GRAILS_CMD="grails"
-
-export_env_dir() {
-  env_dir=$1
-  whitelist_regex=${2:-''}
-  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH)$'}
-  if [ -d "$env_dir" ]; then
-    for e in $(ls $env_dir); do
-      echo "$e" | grep -E "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
-      echo "-------------> Exporting $e=$(cat $env_dir/$e)"
-      export "$e=$(cat $env_dir/$e)"
-      :
-    done
-  fi
-}
 
 check_build_status()
 {
@@ -80,8 +69,6 @@ install_grails()
 
   echo "-----> Done"
 }
-
-export_env_dir $ENV_DIR;
 
 if [ ! -f $BUILD_DIR/application.properties ] ; then
     echo "-----> File not found: application.properties. This file is required. Build failed."
@@ -167,11 +154,6 @@ fi
 if [ "$GRAILS_VERSION" != "1.3.7" ] ; then
     BUILDCMD_OPT="-plain-output"
 fi
-
-#COMPILECMD="$GRAILS_CMD -Divy.default.ivy.user.dir=$CACHE_DIR compile --non-interactive"
-#echo "-----> Executing $COMPILECMD"
-#eval "$COMPILECMD" | sed -u 's/^/       /'
-#check_build_status
 
 COMPILECMD="$GRAILS_CMD -Divy.default.ivy.user.dir=$CACHE_DIR compile --non-interactive"
 echo "-----> Executing $COMPILECMD"
