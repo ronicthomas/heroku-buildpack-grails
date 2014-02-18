@@ -11,7 +11,8 @@ CACHE_DIR=$2
 ENV_DIR=$3
 
 echo 
-
+echo "-------------> All args"
+echo $@
 echo "-------------> Build Dir"
 echo $BUILD_DIR
 echo "-------------> Cache Dir"
