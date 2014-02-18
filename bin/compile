@@ -8,6 +8,7 @@ BIN_DIR=$(cd $(dirname $0); pwd) # absolute path
 # parse args
 BUILD_DIR=$1
 CACHE_DIR=$2
+ENV_DIR=$3
 
 echo 
 
@@ -15,6 +16,8 @@ echo "-------------> Build Dir"
 echo $BUILD_DIR
 echo "-------------> Cache Dir"
 echo $CACHE_DIR
+echo "-------------> Env Dir"
+echo $ENV_DIR
 
 # source in common functions
 . $BIN_DIR/common.sh
@@ -24,6 +27,20 @@ curl --silent --location http://heroku-jvm-common.s3.amazonaws.com/jvm-buildpack
 
 GRAILS_DIR=".grails"
 GRAILS_CMD="grails"
+
+export_env_dir() {
+  env_dir=$1
+  whitelist_regex=${2:-''}
+  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH)$'}
+  if [ -d "$env_dir" ]; then
+    for e in $(ls $env_dir); do
+      echo "$e" | grep -E "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
+      echo "-------------> Exporting $e=$(cat $env_dir/$e)"
+      export "$e=$(cat $env_dir/$e)"
+      :
+    done
+  fi
+}
 
 check_build_status()
 {
@@ -62,6 +79,8 @@ install_grails()
 
   echo "-----> Done"
 }
+
+export_env_dir $ENV_DIR;
 
 if [ ! -f $BUILD_DIR/application.properties ] ; then
     echo "-----> File not found: application.properties. This file is required. Build failed."
