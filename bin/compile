@@ -10,8 +10,6 @@ BUILD_DIR=$1
 CACHE_DIR=$2
 ENV_DIR=$3
 
-echo 
-
 echo "-----> Build Dir"
 echo $BUILD_DIR
 echo "-----> Cache Dir"
@@ -24,9 +22,27 @@ echo $ENV_DIR
 
 curl --silent --location http://heroku-jvm-common.s3.amazonaws.com/jvm-buildpack-common.tar.gz | tar xz
 . bin/java
+. bin/util
+
+export_env_dir $ENV_DIR
 
 GRAILS_DIR=".grails"
 GRAILS_CMD="grails"
+
+
+export_env_dir() {
+  env_dir=$1
+  whitelist_regex=${2:-''}
+  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH)$'}
+  if [ -d "$env_dir" ]; then
+    for e in $(ls $env_dir); do
+      echo "$e" | grep -E "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
+      echo "      Exporting environment variable $e=$(cat $env_dir/$e)"
+      export "$e=$(cat $env_dir/$e)"
+      :
+    done
+  fi
+}
 
 check_build_status()
 {
