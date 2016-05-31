@@ -62,7 +62,7 @@ check_build_status()
 install_grails()
 {
   VER_TO_INSTALL=$1
-  GRAILS_URL="http://dist.springframework.org.s3.amazonaws.com/release/GRAILS/grails-$VER_TO_INSTALL.zip"
+  GRAILS_URL="https://github.com/grails/grails-core/releases/download/v$VER_TO_INSTALL/grails-$VER_TO_INSTALL.zip"
 
   GRAILS_ZIP_FILE="grails-heroku.zip"
   echo "-----> Installing Grails $VER_TO_INSTALL....."
